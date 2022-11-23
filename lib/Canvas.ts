@@ -1,13 +1,15 @@
 type ColorTheme = {
     backgroundColor: string,
     boardColor: string,
-    piecesColor: string
+    blackPiecesColor: string,
+    whitePiecesColor: string
 }
 
 const DefaultColorTheme: ColorTheme = {
-    backgroundColor: "#eeeeee",
-    boardColor: "#5577dd",
-    piecesColor: "#111111"
+    backgroundColor: "#e7e7e7",
+    boardColor: "#a7a7a7",
+    blackPiecesColor: "#131313",
+    whitePiecesColor: "#5b7731"
 }
 
 type PieceChar = {
@@ -16,12 +18,14 @@ type PieceChar = {
 
 
 type BoardOptions = {
-    theme: ColorTheme
+    theme?: ColorTheme,
+    flip?: boolean
 }
 
 
 const DefaultBoardOptions: BoardOptions = {
-    theme: DefaultColorTheme
+    theme: DefaultColorTheme,
+    flip: false
 }
 
 
@@ -30,7 +34,7 @@ const FenPieceToChar: PieceChar = {
     "p": "♟", "k": "♚", "q": "♛", "r": "♜", "b": "♝", "n": "♞"
 }
 
-export class Canvas {
+export default class Canvas {
     el: HTMLElement
     fen: string
     size: number
@@ -51,7 +55,7 @@ export class Canvas {
 
         this.el.style.width = `${size}px`
         this.el.style.height = `${size}px`
-        this.el.style.backgroundColor = this.options.theme.backgroundColor
+        this.el.style.backgroundColor = this.options.theme!.backgroundColor
 
         this.canvas = document.createElement("canvas")
         this.canvas.width = size
@@ -70,9 +74,13 @@ export class Canvas {
     public render(): void {
         const ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
 
-        ctx.strokeStyle = this.options.theme.boardColor
-        ctx.fillStyle = this.options.theme.boardColor
+        // draw background rect
+        ctx.fillStyle = this.options.theme!.backgroundColor
+        ctx.fillStyle = this.options.theme!.backgroundColor
+        ctx.fillRect(0, 0, this.size, this.size)
 
+        ctx.strokeStyle = this.options.theme!.boardColor
+        ctx.fillStyle = this.options.theme!.boardColor
         // draw squares
         for(let i=0; i<8; i++) {
             for(let j=0; j<8; j++) {
@@ -98,6 +106,11 @@ export class Canvas {
         const files = ["a", "b", "c", "d", "e", "f", "g", "h"]
         const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"].reverse()
 
+        if(this.options.flip) {
+            files.reverse()
+            ranks.reverse()
+        }
+
         ctx.font = `${this.boardFontSize}px serif`
 
         for(let i=0; i<files.length; i++) {
@@ -115,6 +128,14 @@ export class Canvas {
         }
     }
 
+    private getPieceColor(pieceChar: string): string {
+        if(pieceChar == pieceChar.toUpperCase()) {
+            return this.options.theme!.whitePiecesColor
+        } else {
+            return this.options.theme!.blackPiecesColor
+        }
+    }
+
     private drawSquare(ctx: CanvasRenderingContext2D, x: number, y: number): void {
         ctx.fillRect(x * this.squareSize + this.boardPadding, y * this.squareSize + this.boardPadding, this.squareSize, this.squareSize)
     }
@@ -123,13 +144,13 @@ export class Canvas {
         const pieces: Array<Array<string>> = this.fenToPieces()
 
         ctx.font = `${this.piecesFontSize}px serif`
-        ctx.fillStyle = this.options.theme.piecesColor
 
         for(let i: number=0; i<pieces.length; i++) {
             for(let j: number=0; j<pieces[i].length; j++) {
                 const piece: string = FenPieceToChar[pieces[j][i]]
                 if(piece) {
                     const charWidth: number = ctx.measureText(piece).width
+                    ctx.fillStyle = this.getPieceColor(pieces[j][i])
                     ctx.fillText(
                         piece,
                         i * this.squareSize + this.squareSize - this.boardPadding / 2 - charWidth / 4,
@@ -138,20 +159,36 @@ export class Canvas {
                 }
             }
         }
-        ctx.fillStyle = this.options.theme.boardColor
+        ctx.fillStyle = this.options.theme!.boardColor
+    }
+
+    private parseFenRow(row: string): Array<string> {
+        const files = row.split("")
+        let filesChars: Array<string> = []
+
+        for(let symbol of files) {
+            if(isNaN(Number(symbol))) {
+                filesChars.push(symbol)
+            } else {
+                filesChars = [...filesChars, ...Array(Number(symbol)).fill("")]
+            }
+        }
+        if(this.options.flip) {
+            filesChars.reverse()
+        }
+        return filesChars
     }
 
     private fenToPieces(): Array<Array<string>> {
         const pieces: Array<Array<string>> = []
         const ranks: Array<string> = this.fen.split(" ")[0].split("/")
 
+        if(this.options.flip) {
+            ranks.reverse()
+        }
+
         for(const row of ranks) {
-            const rowNumber: number = Number(row)
-            if(isNaN(rowNumber)) {
-                pieces.push(row.split(""))
-            } else {
-                pieces.push(Array(rowNumber).fill(""))
-            }
+            pieces.push(this.parseFenRow(row))
         }
         return pieces
     }
